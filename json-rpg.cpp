@@ -6,9 +6,10 @@
 
 int main()
 {
-    JSON::testLexer("C:/Users/therpgmaster/source/repos/json-rpg/test.json");
+    //JSON::testLexer("test.json");
 
 
+	JSONTextUtils::test_utf8to32();
 }
 
 
