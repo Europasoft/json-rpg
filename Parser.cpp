@@ -173,14 +173,14 @@ namespace JSONTextUtils
 
 namespace JSON 
 {
-	JSONFile load(JSONTextUtils::str_view text)
+	Object load(JSONTextUtils::str_view text)
 	{
-		return JSONFile();
+		return Object();
 	}
 
-	JSONFile loadFromFile(JSONTextUtils::str_view filePath)
+	Object loadFromFile(JSONTextUtils::str_view filePath)
 	{
-		return JSONFile();
+		return Object();
 	}
 
 	void testLexer(JSONTextUtils::str_view filePath)
@@ -194,9 +194,51 @@ namespace JSON
 
 		std::vector<Token> tokens;
 		Result r = lex(file, tokens);
-		for (auto& token : tokens) { std::cout << "  " << token.data; }
+		for (auto& token : tokens) 
+		{
+			if (token.type == TokenType::String)
+			{
+				std::cout << " \"" << token.data << "\" ";
+			}
+			else if (token.type == TokenType::Structural)
+			{
+				std::cout << token.data << " \n ";
+			}
+			else
+			{
+				std::cout << "  " << token.data;
+			}
+		}
 		std::cout << "\n\n";
-		for (auto& token : tokens) { std::cout << "  " << token.data << "=" << tokenTypeToString(token.type); }
+		//for (auto& token : tokens) { std::cout << "  " << token.data << "=" << tokenTypeToString(token.type); }
+	}
+
+	bool Object::isNamed() const
+	{
+		return !name.empty();
+	}
+
+	bool Object::isValue() const
+	{
+		return !isContainer() && type != JSON::ObjectType::Undefined;
+	}
+
+	bool Object::isContainer() const
+	{
+		return type == JSON::ObjectType::Array || type == JSON::ObjectType::Object;
+	}
+
+	JSONTextUtils::str_view Object::getValue() const
+	{
+		return value;
+	}
+	size_t Object::size() const
+	{
+		if (isContainer())
+		{
+			return subobjects.size();
+		}
+		return getValue().size();
 	}
 }
 

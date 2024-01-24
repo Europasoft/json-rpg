@@ -47,10 +47,30 @@ namespace JSONTextUtils
 
 namespace JSON 
 {
-	class JSONFile {};
+	enum class ObjectType { Undefined, Object, Array, String, Number, Boolean, Null };
 
-	JSONFile load(JSONTextUtils::str_view text);
-	JSONFile loadFromFile(JSONTextUtils::str_view filePath);
+	class Object
+	{
+	public:
+		Object(ObjectType t) : type{ t } {};
+
+		bool isNamed() const;
+		bool isValue() const;
+		bool isContainer() const;
+		JSONTextUtils::str_view getValue() const;
+		size_t size() const noexcept;
+
+		std::unique_ptr<Object>& operator[](int i) { return subobjects[i]; }
+		const std::unique_ptr<Object>& operator[](int i) const { return subobjects[i]; }
+
+	private:
+		ObjectType type = ObjectType::Undefined;
+		std::vector<std::unique_ptr<Object>> subobjects;
+		JSONTextUtils::str_t name, value;
+	};
+
+	Object load(JSONTextUtils::str_view text);
+	Object loadFromFile(JSONTextUtils::str_view filePath);
 	void testLexer(JSONTextUtils::str_view filePath);
 
 }
