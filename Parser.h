@@ -66,7 +66,12 @@ namespace JSON
 		JSONTextUtils::str_view getValue() const;
 		size_t size() const noexcept;
 		void set(ObjectType t, JSONTextUtils::str_view v);
-		
+
+	public:
+		JSONTextUtils::str_t toString(bool readable = true) const;
+	private:
+		JSONTextUtils::str_t getSubobjectsAsStringInternal(size_t& depth, bool readable) const;
+	public:
 
 		Object& operator[](int i) { return subobjects[i]; }
 		const Object& operator[](int i) const { return subobjects[i]; }
@@ -75,6 +80,8 @@ namespace JSON
 		std::vector<Object> subobjects;
 		ObjectType type;
 		JSONTextUtils::str_t value;
+
+
 	};
 
 	enum class Result

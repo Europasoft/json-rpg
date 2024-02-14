@@ -263,6 +263,53 @@ namespace JSON
 		type = t;
 		value = v;
 	}
+
+	JSONTextUtils::str_t Object::toString(bool readable) const
+	{
+		if (subobjects.empty()) { return JSONTextUtils::str_t(); }
+		size_t recursionDepth = -1;
+		return subobjects[0].getSubobjectsAsStringInternal(recursionDepth, readable);
+	}
+
+    JSONTextUtils::str_t Object::getSubobjectsAsStringInternal(size_t& depth, bool readable) const
+    {
+		// TODO: make readable==false produce more compact output
+		depth++;
+		JSONTextUtils::str_t indent;
+		for (size_t i = 0; i < depth; i++) indent += "\t";
+		JSONTextUtils::str_t s = indent;
+
+		if (!name.empty()) { s += "\n" + indent + name + ":"; }
+
+		if (type == ObjectType::Object)
+			s += "\n" + indent + "{";
+		else if (type == ObjectType::Array)
+			s += "\n" + indent + "[";
+
+		for (size_t i = 0; i < subobjects.size(); i++)
+		{
+			s += indent + subobjects[i].getSubobjectsAsStringInternal(depth, readable);
+			if (i < subobjects.size()-1) s += ",";
+		}
+
+		if (type == ObjectType::Object)
+			s += "\n" + indent + "}";
+		else if (type == ObjectType::Array)
+			s += "\n" + indent + "]";
+
+		else if (type == ObjectType::String)
+		{
+			if (!name.empty())
+				s += "\"" + value + "\"";
+			else
+				s += "\n" + indent + "\"" + value + "\"";
+		}
+		else
+			s += "\n" + indent + value;
+
+		depth--;
+        return s;
+    }
 	
 	void Object::reset()
 	{
