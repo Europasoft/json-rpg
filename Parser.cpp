@@ -177,7 +177,7 @@ namespace JSONTextUtils
 namespace JSON 
 {
 
-	Result load(JSONTextUtils::str_view text, Object& objectOut)
+	Result load(str_view text, Object& objectOut)
 	{
 		std::vector<Token> tokens;
 		Result result = lex(text, tokens);
@@ -185,12 +185,12 @@ namespace JSON
 		return parse(tokens, objectOut);
 	}
 
-	Result loadFromFile(JSONTextUtils::str_view filePath, Object& objectOut)
+	Result loadFromFile(str_view filePath, Object& objectOut)
 	{
 		std::ifstream fs;
 		size_t fileSize;
 		if (!openFile(filePath, fs, fileSize)) { return Result::Error_File; }
-		JSONTextUtils::str_t file;
+		str_t file;
 		file.resize(fileSize);
 		fs.read(&file[0], file.length());
 
@@ -198,12 +198,12 @@ namespace JSON
 	}
 	
 		
-	void testLexer(JSONTextUtils::str_view filePath)
+	void testLexer(str_view filePath)
 	{
 		std::ifstream fs;
 		size_t fileSize;
 		if (!openFile(filePath, fs, fileSize)) { return; }
-		JSONTextUtils::str_t file;
+		str_t file;
 		file.resize(fileSize);
 		fs.read(&file[0], file.length());
 
@@ -244,7 +244,7 @@ namespace JSON
 		return type == JSON::ObjectType::Array || type == JSON::ObjectType::Object;
 	}
 
-	JSONTextUtils::str_view Object::getValue() const
+	str_view Object::getValue() const
 	{
 		return value;
 	}
@@ -258,33 +258,41 @@ namespace JSON
 		return getValue().size();
 	}
 
-	void Object::set(ObjectType t, JSONTextUtils::str_view v)
+	void Object::set(ObjectType t, str_view v)
 	{
 		type = t;
 		value = v;
 	}
 
-	JSONTextUtils::str_t Object::toString(bool readable) const
+	void Object::reset()
 	{
-		if (subobjects.empty()) { return JSONTextUtils::str_t(); }
+		type = ObjectType::Undefined;
+		subobjects.clear();
+		name = value = str_t();
+	}
+
+	str_t Object::toString(bool readable) const
+	{
+		if (subobjects.empty()) { return str_t(); }
 		size_t recursionDepth = -1;
 		return subobjects[0].getSubobjectsAsStringInternal(recursionDepth, readable);
 	}
 
-    JSONTextUtils::str_t Object::getSubobjectsAsStringInternal(size_t& depth, bool readable) const
+    str_t Object::getSubobjectsAsStringInternal(size_t& depth, bool readable) const
     {
-		// TODO: make readable==false produce more compact output
-		depth++;
-		JSONTextUtils::str_t indent;
-		for (size_t i = 0; i < depth; i++) indent += "\t";
-		JSONTextUtils::str_t s = indent;
+		const str_t nl = (readable) ? "\n" : "";
 
-		if (!name.empty()) { s += "\n" + indent + name + ":"; }
+		depth++;
+		str_t indent;
+		if (readable) { for (size_t i = 0; i < depth; i++) { indent += "\t"; } }
+		str_t s = indent;
+
+		if (!name.empty()) { s += nl + indent + "\""+name+"\"" + ":"; }
 
 		if (type == ObjectType::Object)
-			s += "\n" + indent + "{";
+			s += nl + indent + "{";
 		else if (type == ObjectType::Array)
-			s += "\n" + indent + "[";
+			s += nl + indent + "[";
 
 		for (size_t i = 0; i < subobjects.size(); i++)
 		{
@@ -293,30 +301,24 @@ namespace JSON
 		}
 
 		if (type == ObjectType::Object)
-			s += "\n" + indent + "}";
+			s += nl + indent + "}";
 		else if (type == ObjectType::Array)
-			s += "\n" + indent + "]";
+			s += nl + indent + "]";
 
 		else if (type == ObjectType::String)
 		{
 			if (!name.empty())
 				s += "\"" + value + "\"";
 			else
-				s += "\n" + indent + "\"" + value + "\"";
+				s += nl + indent + "\"" + value + "\"";
 		}
 		else
-			s += "\n" + indent + value;
+			s += nl + indent + value;
 
 		depth--;
         return s;
     }
 	
-	void Object::reset()
-	{
-		type = ObjectType::Undefined;
-		subobjects.clear();
-		name = value = JSONTextUtils::str_t();
-	}
 }
 
 namespace

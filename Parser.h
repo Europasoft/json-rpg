@@ -48,6 +48,9 @@ namespace JSONTextUtils
 
 namespace JSON 
 {
+	using str_view = JSONTextUtils::str_view;
+	using str_t = JSONTextUtils::str_t;
+
 	enum class ObjectType { Undefined, Object, Array, String, Number, Boolean, Null };
 
 	class Object
@@ -114,8 +117,6 @@ namespace JSON
 namespace
 {
 	using namespace JSONTextUtils;
-	using str_view = JSONTextUtils::str_view;
-	using str_t = JSONTextUtils::str_t;
 
 	enum class TokenType { Undefined, Structural, String, Number, Boolean, Null };
 	enum class StructuralTokenType { NotStructural, ObjectBegin, ObjectEnd, ArrayBegin, ArrayEnd, KeyValueDelim, MemberDelim };
