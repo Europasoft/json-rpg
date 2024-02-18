@@ -34,7 +34,10 @@ namespace JSONTextUtils
 	bool isDigitValid(int32_t d);
 
 	bool isliteralBooleanStr(size_t i, str_view text);
-	std::string literalBooleanValue(uint8_t c);
+	str_view literalBooleanValue(size_t& i, str_view text);
+
+	bool isLiteralNullStr(size_t i, str_view text);
+	str_view literalNullValue(size_t& i, str_view text);
 
 	// converts a single UTF-8 codepoint to UTF-32BE
 	uint32_t utf8to32be(str_view fullString, size_t& startIndexInOut);
@@ -107,6 +110,8 @@ namespace JSON
 		Error_Parser_InvalidKeyValuePair		= 15,	// invalid name or value
 		Error_Parser_MissingSeparator			= 16	// expected comma before token
 	};
+	#define RETURN_ERROR(err) return JSON::Result::err
+	#define RETURN_ERROR_IF(condition, err) if (condition) { RETURN_ERROR(err); }
 
 	Result load(JSONTextUtils::str_view text, Object& objectOut);
 	Result loadFromFile(JSONTextUtils::str_view filePath, Object& objectOut);

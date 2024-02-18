@@ -66,21 +66,29 @@ namespace JSONTextUtils
 
 	bool isliteralBooleanStr(size_t i, str_view text)
 	{
-		const int64_t len = text.length() - i;
-		if (len < 4) { return false; }
-		str_view s = text.substr(i, len == 4 ? 4 : 5);
-		return s == "true" || s == "false";
+		const auto len = text.length() - i;
+		return (len > 3 && text.substr(i, 4) == "true") || (len > 4 && text.substr(i, 5) == "false");
 	}
 
-	std::string literalBooleanValue(uint8_t c)
+	str_view literalBooleanValue(size_t& i, str_view text)
 	{
-		return c == 0x74 ? "1" : "0";
+		auto len = text.length() - i;
+		assert(len >= 4);
+		len = (ctu8(text[i]) == 0x74) ? 4 : 5;
+		auto strBool = text.substr(i, len);
+		i += len - 1;
+		return strBool;
 	}
 
 	bool isLiteralNullStr(size_t i, str_view text)
 	{
-		if (text.length() - i < 4) { return false; }
-		return ctu8(text[i]) == 0x6E && ctu8(text[i + 1]) == 0x75 && ctu8(text[i + 2]) == 0x6C && ctu8(text[i + 3]) == 0x6C;
+		return (text.length() - i > 3) && text.substr(i, 4) == "null";
+	}
+
+	str_view literalNullValue(size_t& i)
+	{
+		i += 3;
+		return "null";
 	}
 
 	uint32_t utf8to32be(str_view fullString, size_t& startIndexInOut)
@@ -307,13 +315,15 @@ namespace JSON
 
 		else if (type == ObjectType::String)
 		{
-			if (!name.empty())
-				s += "\"" + value + "\"";
-			else
-				s += nl + indent + "\"" + value + "\"";
+			s += name.empty() ? nl + indent + "\"" + value + "\""  :  "\"" + value + "\"";
+			//if (!name.empty())
+			//	s += "\"" + value + "\"";
+			//else
+			//	s += nl + indent + "\"" + value + "\"";
 		}
 		else
-			s += nl + indent + value;
+			s += name.empty() ? nl + indent + value  :  value;
+			
 
 		depth--;
         return s;
@@ -355,12 +365,13 @@ namespace
 				else if (isStructuralChar(c)) { tokens.push_back(Token(TokenType::Structural, str_t(1, c))); }
 				else if (c == STR_DELIM) { token.type = TokenType::String; inString = true; }
 
-				// TODO: check for all possible literals
-				else if (isliteralBooleanStr(i, text)) { tokens.push_back(Token(TokenType::Boolean, literalBooleanValue(c))); }
+				else if (isliteralBooleanStr(i, text)) { tokens.push_back(Token(TokenType::Boolean, literalBooleanValue(i, text))); }
+				else if (isLiteralNullStr(i, text)) { tokens.push_back(Token(TokenType::Null, literalNullValue(i))); }
+
 				else if (numBytes > 1) { return JSON::Result::Error_Lexer_IllegalTokenMultiByte; }
 				else { return JSON::Result::Error_Lexer_IllegalToken; }
 			}
-			else // string
+			else // string	
 			{
 				if (numBytes == 1)
 				{
@@ -441,17 +452,16 @@ namespace
 	{
 		objectOut.reset();
 		auto numTokens = tokens.size();
-		if (!numTokens) { return JSON::Result::Error_Parser_NoTokens; } // fail: no tokens passed to parser
+		RETURN_ERROR_IF(!numTokens, Error_Parser_NoTokens); // fail: no tokens passed to parser
 
 		if (valueTokenToObjType(tokens[0]) != JSON::ObjectType::Undefined)
 		{
 			// string, number, bool, or null at start
-			if (numTokens > 1) { return JSON::Result::Error_Parser_InvalidRoot; } // fail: text root must be a lone value, an unnamed object, or an unnamed array
+			RETURN_ERROR_IF(numTokens > 1, Error_Parser_InvalidRoot); // fail: text root must be a lone value, an unnamed object, or an unnamed array
 			objectOut.set(valueTokenToObjType(tokens[0]), tokens[0].data);
 			return JSON::Result::OK; // lone value is ok
 		}
-		if (tokens[0].data[0] != STC_SBR_L && tokens[0].data[0] != STC_CBR_L) { return JSON::Result::Error_Parser_IllegalTokenAtStart; } // fail: incorrect structural character at start
-
+		RETURN_ERROR_IF(tokens[0].data[0] != STC_SBR_L && tokens[0].data[0] != STC_CBR_L, Error_Parser_IllegalTokenAtStart); // fail: incorrect structural character at start
 
 		std::stack<JSON::Object> objects;
 		objects.push(JSON::Object(JSON::ObjectType::Object, "root"));
@@ -464,8 +474,8 @@ namespace
 			const str_view data = tokens[i].data;
 
 			if (i > 0) { lastToken = &tokens[i-1]; }
-			if (type == TokenType::Undefined) { return JSON::Result::Error_Parser_UndefinedToken; } // fail: token with undefined type passed to parser
-			if (data.empty()) { return JSON::Result::Error_Parser_EmptyToken; } // fail: empty token passed to parser
+			RETURN_ERROR_IF(type == TokenType::Undefined, Error_Parser_UndefinedToken); // fail: token with undefined type passed to parser
+			RETURN_ERROR_IF(data.empty(), Error_Parser_EmptyToken); // fail: empty token passed to parser
 
 			const JSON::ObjectType valueType = valueTokenToObjType(tokens[i]);
 			const StructuralTokenType strucType = structuralTokenToObjType(tokens[i]);
@@ -478,16 +488,16 @@ namespace
 				if (strucType == StructuralTokenType::ObjectBegin || strucType == StructuralTokenType::ArrayBegin)
 				{
 					// begin container
-					if (isInArray && !name.empty()) { return JSON::Result::Error_Parser_NamedValueInArray; } // fail: named object inside array
-					if (!isInArray && name.empty() && i != 0) { return JSON::Result::Error_Parser_LoneValue; } // fail: unnamed object not allowed outside arrays
+					RETURN_ERROR_IF(isInArray && !name.empty(), Error_Parser_NamedValueInArray); // fail: named object inside array
+					RETURN_ERROR_IF(!isInArray && name.empty() && i != 0, Error_Parser_LoneValue); // fail: unnamed object not allowed outside arrays
 					if (i > 0)
 					{
 						const StructuralTokenType prevStrucType = structuralTokenToObjType(tokens[name.empty() ? i - 1 : i - 3]);
-						if (prevStrucType != StructuralTokenType::MemberDelim &&
-							prevStrucType != StructuralTokenType::ObjectBegin &&
-							prevStrucType != StructuralTokenType::ArrayBegin) { return JSON::Result::Error_Parser_MissingSeparator; } // fail: unexpected token  
+						RETURN_ERROR_IF(prevStrucType != StructuralTokenType::MemberDelim &&
+										prevStrucType != StructuralTokenType::ObjectBegin &&
+										prevStrucType != StructuralTokenType::ArrayBegin, 
+										Error_Parser_MissingSeparator); // fail: unexpected token  
 					}
-
 					objects.push(JSON::Object(isArrayToken ? JSON::ObjectType::Array : JSON::ObjectType::Object, name));
 					name = str_view(); // clear name
 				}
@@ -495,26 +505,26 @@ namespace
 				{
 					// end container
 					JSON::Object top = objects.top();
-					if ((top.type == JSON::ObjectType::Array) != isArrayToken) { return JSON::Result::Error_Parser_IllegalClosingToken; } // fail: incorrect token at end of container
+					RETURN_ERROR_IF((top.type == JSON::ObjectType::Array) != isArrayToken, Error_Parser_IllegalClosingToken); // fail: incorrect token at end of container
 					objects.pop();
 					objects.top().subobjects.push_back(top);
 				}
 				else if (strucType == StructuralTokenType::KeyValueDelim)
 				{
 					// fail: delimiter not following a string is illegal (pairs are properly handled when a name string is encountered)
-					return JSON::Result::Error_Parser_InvalidKeyValuePair;
+					RETURN_ERROR(Error_Parser_InvalidKeyValuePair);
 				}
 				// commas are ignored at first, handled in the next iteration
 				else if (strucType != StructuralTokenType::MemberDelim)
 				{
-					return JSON::Result::Error_Parser_UndefinedToken;
+					RETURN_ERROR(Error_Parser_UndefinedToken);
 				}
 			}
 			
 			else if (valueType != JSON::ObjectType::Undefined)
 			{
 				// string, number, bool, or null
-				if (i + 1 >= numTokens) { return JSON::Result::Error_Parser_ExpectedTokenAfterValue; } // fail: expected additional tokens following value
+				if (i + 1 >= numTokens) { RETURN_ERROR(Error_Parser_ExpectedTokenAfterValue); } // fail: expected additional tokens following value
 				
 				if (valueType == JSON::ObjectType::String && structuralTokenToObjType(tokens[i+1]) == StructuralTokenType::KeyValueDelim)
 				{
@@ -522,15 +532,18 @@ namespace
 					const auto nextStrucType = structuralTokenToObjType(tokens[i+2]);
 					if (valueTokenToObjType(tokens[i+2]) == JSON::ObjectType::Undefined && 
 						nextStrucType != StructuralTokenType::ArrayBegin && 
-						nextStrucType != StructuralTokenType::ObjectBegin) { return JSON::Result::Error_Parser_InvalidKeyValuePair; } // fail: expected a named value or object
-					if (isInArray) { return JSON::Result::Error_Parser_NamedValueInArray; } // fail: named value inside array
+						nextStrucType != StructuralTokenType::ObjectBegin) 
+					{
+						RETURN_ERROR(Error_Parser_InvalidKeyValuePair); // fail: expected a named value or object
+					} 
+					if (isInArray) { RETURN_ERROR(Error_Parser_NamedValueInArray); } // fail: named value inside array
 					name = data;
 					i++; // skip the ":"
 					continue;
 				}
-				else if (name.empty() && objects.top().type != JSON::ObjectType::Array) { return JSON::Result::Error_Parser_LoneValue; } // fail: unnamed value not allowed outside arrays
+				else if (name.empty() && objects.top().type != JSON::ObjectType::Array) { RETURN_ERROR(Error_Parser_LoneValue); } // fail: unnamed value not allowed outside arrays
 
-				objects.top().subobjects.push_back(JSON::Object(JSON::ObjectType::String, name, data));
+				objects.top().subobjects.push_back(JSON::Object(valueType, name, data));
 				name = str_view(); // clear name
 			}
 
@@ -538,10 +551,6 @@ namespace
 		objectOut = objects.top();
 		return JSON::Result::OK;
 	}
-
-
-
-
 }
 
 
